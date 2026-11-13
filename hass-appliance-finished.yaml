@@ -1,9 +1,20 @@
 blueprint:
   name: Appliance has finished
-  description: Do something when an appliance (like a washing machine or dishwasher)
+  description: >
+    Version 1.1.0
+
+    Do something when an appliance (like a washing machine or dishwasher)
     has finished as detected by a power sensor.
     Fork of https://gist.github.com/sbyx/6d8344d3575c9865657ac51915684696
+
+    The following variables are available in your action templates:
+    - `appliance_entity_id`   – entity_id of the power sensor
+    - `appliance_entity_name` – display name of the entity (uses entity_name(), 2026.4+)
+    - `appliance_device_name` – name of the parent device (uses device_name(), 2026.4+)
+    - `appliance_area_name`   – name of the area the device is assigned to (uses area_name(), 2026.4+)
   domain: automation
+  homeassistant:
+    min_version: "2026.11.0"
   input:
     power_sensor:
       name: Power Sensor
@@ -57,34 +68,53 @@ blueprint:
           unit_of_measurement: min
           mode: slider
           step: 0.25
-    actions:
-      name: Actions
-      description: Actions (e.g. pushing a notification, TTS announcement, ...)
-      selector:
-        action: {}
     pre_actions:
-      name: Actions
-      description: Actions when starting threshhold is crossed
+      name: Actions when starting
+      description: >
+        Actions executed when the starting threshold is crossed.
+        Use variables: appliance_entity_id, appliance_entity_name,
+        appliance_device_name, appliance_area_name.
+      default: []
       selector:
         action: {}
-  source_url: 
-trigger:
-- platform: numeric_state
-  entity_id: !input 'power_sensor'
-  for:
-    minutes: !input 'starting_hysteresis'
-  above: !input 'starting_threshold'
-condition: []
-action:
-- choose: []
-  default: !input 'pre_actions'
-- wait_for_trigger:
-  - platform: numeric_state
-    entity_id: !input 'power_sensor'
-    below: !input 'finishing_threshold'
+    actions:
+      name: Actions when finished
+      description: >
+        Actions executed when the appliance has finished (e.g. push a
+        notification, TTS announcement).
+        Use variables: appliance_entity_id, appliance_entity_name,
+        appliance_device_name, appliance_area_name.
+      selector:
+        action: {}
+  source_url: https://github.com/FlySmack/hass-appliance-finished.git
+
+variables:
+  _power_sensor: !input power_sensor
+  appliance_entity_id: "{{ _power_sensor }}"
+  appliance_entity_name: "{{ entity_name(_power_sensor) }}"
+  appliance_device_name: "{{ device_name(_power_sensor) }}"
+  appliance_area_name: "{{ area_name(_power_sensor) }}"
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input power_sensor
     for:
-      minutes: !input 'finishing_hysteresis'
-- choose: []
-  default: !input 'actions'
+      minutes: !input starting_hysteresis
+    above: !input starting_threshold
+
+conditions: []
+
+actions:
+  - choose: []
+    default: !input pre_actions
+  - wait_for_trigger:
+      - trigger: numeric_state
+        entity_id: !input power_sensor
+        below: !input finishing_threshold
+        for:
+          minutes: !input finishing_hysteresis
+  - choose: []
+    default: !input actions
+
 mode: single
 max_exceeded: silent
